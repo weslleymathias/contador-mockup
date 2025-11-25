@@ -24,19 +24,24 @@ export default function AppOriginal() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Navigation Bar - Top */}
-      <nav className="flex items-center justify-around py-3 px-2 border-b shadow-sm" style={{ backgroundColor: '#002B6B' }}>
+      <nav className="flex items-center justify-around py-2 px-2 border-b shadow-sm" style={{ backgroundColor: '#002B6B' }}>
         {navigation.map((item) => {
           const Icon = item.icon;
+          const isActive = currentView === item.id;
           return (
             <button
               key={item.id + item.label}
               onClick={() => setCurrentView(item.id)}
-              className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
-                currentView === item.id ? 'bg-white/20' : 'hover:bg-white/10'
+              className={`flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[70px] ${
+                isActive ? 'bg-white/20 scale-105' : 'hover:bg-white/10'
               }`}
-              style={{ minWidth: '60px' }}
+              aria-label={item.label}
+              title={item.label}
             >
-              <Icon className="w-6 h-6 text-white" />
+              <Icon className={`w-5 h-5 md:w-6 md:h-6 text-white ${isActive ? 'drop-shadow-lg' : ''}`} />
+              <span className={`text-[10px] md:text-xs text-white ${isActive ? 'font-semibold' : ''}`}>
+                {item.label}
+              </span>
             </button>
           );
         })}
