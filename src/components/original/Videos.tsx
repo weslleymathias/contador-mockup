@@ -1,227 +1,345 @@
 import { useState } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Download, FolderOpen, Folder, ChevronDown, ChevronRight, FileVideo, Calendar as CalendarIcon, X } from 'lucide-react';
 import { Button } from '../ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../ui/alert-dialog';
 import { toast } from 'sonner@2.0.3';
+import { Calendar } from '../ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
-type VideoRecord = {
+type Video = {
   id: number;
-  date: string;
-  time: string;
-  duration: string;
+  name: string;
   size: string;
-  thumbnail: string;
+  duration: string;
 };
 
-export function Videos() {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [videoToDelete, setVideoToDelete] = useState<number | null>(null);
-  const itemsPerPage = 6;
+type HourFolder = {
+  hour: string;
+  videos: Video[];
+};
 
-  // Mock data - simulando gravações
-  const allVideos: VideoRecord[] = Array.from({ length: 25 }, (_, i) => ({
-    id: i + 1,
-    date: new Date(2025, 10, Math.floor(Math.random() * 19) + 1).toLocaleDateString('pt-BR'),
-    time: `${String(Math.floor(Math.random() * 12) + 8).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
-    duration: `${Math.floor(Math.random() * 5) + 1}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
-    size: `${(Math.random() * 500 + 100).toFixed(1)} MB`,
-    thumbnail: '#',
+type DateFolder = {
+  date: string;
+  hours: HourFolder[];
+};
+
+// Função para gerar dados mock organizados
+function generateMockData(): DateFolder[] {
+  const dates = ['2025-12-23', '2025-12-22', '2025-12-21', '2025-12-20', '2025-12-19'];
+  const hours = ['16h', '15h', '14h', '13h', '12h', '11h', '10h', '09h'];
+  
+  return dates.map(date => ({
+    date,
+    hours: hours.slice(0, Math.floor(Math.random() * 4) + 3).map(hour => ({
+      hour,
+      videos: Array.from({ length: Math.floor(Math.random() * 5) + 2 }, (_, i) => ({
+        id: Math.floor(Math.random() * 10000),
+        name: `video_${date}_${hour.replace('h', '')}_${String(i + 1).padStart(3, '0')}.mp4`,
+        size: `${(Math.random() * 500 + 100).toFixed(1)} MB`,
+        duration: `${Math.floor(Math.random() * 5) + 1}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`
+      }))
+    }))
   }));
+}
 
-  const totalPages = Math.ceil(allVideos.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentVideos = allVideos.slice(startIndex, endIndex);
+export function Videos() {
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  
+  const videoData = generateMockData();
 
-  const handlePlay = (id: number) => {
-    toast.info(`Reproduzindo vídeo #${id}`);
+  // Função para formatar data no formato YYYY-MM-DD
+  const formatDateToString = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
-  const handleDownload = (id: number) => {
-    toast.success(`Download do vídeo #${id} iniciado`);
-  };
+  // Filtrar dados baseado na data selecionada
+  const filteredVideoData = selectedDate 
+    ? videoData.filter(folder => folder.date === formatDateToString(selectedDate))
+    : videoData;
 
-  const confirmDelete = () => {
-    if (videoToDelete) {
-      toast.success(`Vídeo #${videoToDelete} excluído`);
-      setVideoToDelete(null);
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
+    setIsCalendarOpen(false);
+    if (date) {
+      // Auto-expande a pasta da data selecionada
+      setExpandedDates(new Set([formatDateToString(date)]));
     }
   };
 
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleTodayClick = () => {
+    const today = new Date();
+    setSelectedDate(today);
+    setIsCalendarOpen(false);
+    // Auto-expande a pasta de hoje
+    setExpandedDates(new Set([formatDateToString(today)]));
+  };
+
+  const handleClearFilter = () => {
+    setSelectedDate(undefined);
+    setExpandedDates(new Set());
+    setExpandedHours(new Set());
+  };
+
+  const toggleDate = (date: string) => {
+    const newExpanded = new Set(expandedDates);
+    if (newExpanded.has(date)) {
+      newExpanded.delete(date);
+      // Também fecha todas as horas dessa data
+      const hoursToRemove = Array.from(expandedHours).filter(h => h.startsWith(date));
+      hoursToRemove.forEach(h => expandedHours.delete(h));
+      setExpandedHours(new Set(expandedHours));
+    } else {
+      newExpanded.add(date);
     }
+    setExpandedDates(newExpanded);
+  };
+
+  const toggleHour = (date: string, hour: string) => {
+    const key = `${date}-${hour}`;
+    const newExpanded = new Set(expandedHours);
+    if (newExpanded.has(key)) {
+      newExpanded.delete(key);
+    } else {
+      newExpanded.add(key);
+    }
+    setExpandedHours(newExpanded);
+  };
+
+  const handleDownloadDateZip = (date: string) => {
+    toast.success(`Download do arquivo zip de ${date} iniciado`);
+  };
+
+  const handleDownloadHourZip = (date: string, hour: string) => {
+    toast.success(`Download do arquivo zip de ${date} às ${hour} iniciado`);
+  };
+
+  const handleDownloadVideo = (videoName: string) => {
+    toast.success(`Download de ${videoName} iniciado`);
+  };
+
+  const getTotalVideos = () => {
+    return filteredVideoData.reduce((total, dateFolder) => 
+      total + dateFolder.hours.reduce((sum, hourFolder) => sum + hourFolder.videos.length, 0)
+    , 0);
   };
 
   return (
     <div className="px-4 pb-4">
       <h2 className="text-xl mb-4 text-center">Gravações de Vídeo</h2>
 
+      {/* Filtro de Data */}
+      <div className="mb-4 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap justify-center">
+          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="text-sm"
+                style={{ borderColor: '#002B6B', color: '#002B6B' }}
+              >
+                <CalendarIcon className="w-4 h-4 mr-2" />
+                {selectedDate ? formatDateToString(selectedDate) : 'Selecionar data'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleDateSelect}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            onClick={handleTodayClick}
+            variant="outline"
+            size="sm"
+            className="text-sm"
+            style={{ borderColor: '#336699', color: '#336699' }}
+          >
+            Hoje
+          </Button>
+
+          {selectedDate && (
+            <Button
+              onClick={handleClearFilter}
+              variant="outline"
+              size="sm"
+              className="text-sm"
+              style={{ borderColor: '#666', color: '#666' }}
+            >
+              <X className="w-4 h-4 mr-1" />
+              Limpar
+            </Button>
+          )}
+        </div>
+
+        {selectedDate && (
+          <div className="text-center text-sm text-gray-600">
+            Exibindo vídeos de: <strong>{formatDateToString(selectedDate)}</strong>
+          </div>
+        )}
+      </div>
+
       {/* Info Box */}
       <div className="bg-gray-50 border rounded-lg p-3 mb-4" style={{ borderColor: '#336699' }}>
         <p className="text-xs text-gray-700 text-center">
-          Total de <strong>{allVideos.length} gravações</strong> • Página {currentPage} de {totalPages}
+          Total de <strong>{getTotalVideos()} vídeos</strong> organizados em <strong>{filteredVideoData.length} {filteredVideoData.length === 1 ? 'data' : 'datas'}</strong>
         </p>
       </div>
 
-      {/* Videos Grid */}
-      <div className="space-y-3 mb-4">
-        {currentVideos.map((video) => (
-          <div
-            key={video.id}
-            className="bg-white border-2 rounded-lg overflow-hidden"
-            style={{ borderColor: '#002B6B' }}
-          >
-            {/* Thumbnail */}
-            <div className="relative bg-gray-800 aspect-video flex items-center justify-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-600 to-gray-900"></div>
-              <Play className="w-12 h-12 text-white opacity-70 relative z-10" />
-              <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                {video.duration}
-              </div>
-            </div>
-
-            {/* Video Info */}
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-2 text-sm mb-1">
-                    <Calendar className="w-4 h-4 text-gray-600" />
-                    <span>{video.date}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>{video.time}</span>
-                    <span className="mx-2">•</span>
-                    <span>{video.size}</span>
-                  </div>
+      {/* Hierarchical Video Structure */}
+      <div className="space-y-2">
+        {filteredVideoData.map((dateFolder) => {
+          const isDateExpanded = expandedDates.has(dateFolder.date);
+          const totalVideosInDate = dateFolder.hours.reduce((sum, h) => sum + h.videos.length, 0);
+          
+          return (
+            <div key={dateFolder.date} className="bg-white border-2 rounded-lg overflow-hidden" style={{ borderColor: '#002B6B' }}>
+              {/* Date Folder Header */}
+              <div className="p-3" style={{ backgroundColor: '#f8fafc' }}>
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => toggleDate(dateFolder.date)}
+                    className="flex items-center gap-2 flex-1 text-left hover:opacity-70 transition-opacity"
+                  >
+                    {isDateExpanded ? (
+                      <ChevronDown className="w-5 h-5" style={{ color: '#002B6B' }} />
+                    ) : (
+                      <ChevronRight className="w-5 h-5" style={{ color: '#002B6B' }} />
+                    )}
+                    {isDateExpanded ? (
+                      <FolderOpen className="w-5 h-5" style={{ color: '#336699' }} />
+                    ) : (
+                      <Folder className="w-5 h-5" style={{ color: '#336699' }} />
+                    )}
+                    <span className="font-medium" style={{ color: '#002B6B' }}>
+                      {dateFolder.date}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({totalVideosInDate} {totalVideosInDate === 1 ? 'vídeo' : 'vídeos'})
+                    </span>
+                  </button>
+                  
+                  <button
+                    onClick={() => handleDownloadDateZip(dateFolder.date)}
+                    className="flex items-center gap-1 text-sm hover:opacity-70 transition-opacity px-3 py-1 rounded"
+                    style={{ color: '#336699' }}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Baixar zip</span>
+                  </button>
                 </div>
-                <div className="text-xs text-gray-500">
-                  ID: {video.id}
-                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  onClick={() => handlePlay(video.id)}
-                  size="sm"
-                  className="text-white"
-                  style={{ backgroundColor: '#336699' }}
-                >
-                  <Play className="w-4 h-4 mr-1" />
-                  Play
-                </Button>
-                <Button
-                  onClick={() => handleDownload(video.id)}
-                  size="sm"
-                  variant="outline"
-                  style={{ borderColor: '#002B6B', color: '#002B6B' }}
-                >
-                  <Download className="w-4 h-4 mr-1" />
-                  Baixar
-                </Button>
-                <Button
-                  onClick={() => setVideoToDelete(video.id)}
-                  size="sm"
-                  variant="outline"
-                  className="border-red-500 text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Excluir
-                </Button>
-              </div>
+              {/* Hours within Date */}
+              {isDateExpanded && (
+                <div className="border-t" style={{ borderColor: '#e2e8f0' }}>
+                  {dateFolder.hours.map((hourFolder) => {
+                    const hourKey = `${dateFolder.date}-${hourFolder.hour}`;
+                    const isHourExpanded = expandedHours.has(hourKey);
+                    
+                    return (
+                      <div key={hourKey} className="border-b last:border-b-0" style={{ borderColor: '#e2e8f0' }}>
+                        {/* Hour Folder Header */}
+                        <div className="p-3 pl-8" style={{ backgroundColor: '#fafbfc' }}>
+                          <div className="flex items-center justify-between">
+                            <button
+                              onClick={() => toggleHour(dateFolder.date, hourFolder.hour)}
+                              className="flex items-center gap-2 flex-1 text-left hover:opacity-70 transition-opacity"
+                            >
+                              {isHourExpanded ? (
+                                <ChevronDown className="w-4 h-4" style={{ color: '#002B6B' }} />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" style={{ color: '#002B6B' }} />
+                              )}
+                              {isHourExpanded ? (
+                                <FolderOpen className="w-4 h-4" style={{ color: '#336699' }} />
+                              ) : (
+                                <Folder className="w-4 h-4" style={{ color: '#336699' }} />
+                              )}
+                              <span className="text-sm font-medium" style={{ color: '#002B6B' }}>
+                                {hourFolder.hour}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ({hourFolder.videos.length} {hourFolder.videos.length === 1 ? 'vídeo' : 'vídeos'})
+                              </span>
+                            </button>
+                            
+                            <button
+                              onClick={() => handleDownloadHourZip(dateFolder.date, hourFolder.hour)}
+                              className="flex items-center gap-1 text-sm hover:opacity-70 transition-opacity px-3 py-1 rounded"
+                              style={{ color: '#336699' }}
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>Baixar zip</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Videos within Hour */}
+                        {isHourExpanded && (
+                          <div className="bg-white">
+                            {hourFolder.videos.map((video) => (
+                              <div
+                                key={video.id}
+                                className="flex items-center justify-between p-3 pl-14 border-t hover:bg-gray-50 transition-colors"
+                                style={{ borderColor: '#f1f5f9' }}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  <FileVideo className="w-4 h-4 text-gray-600" />
+                                  <div>
+                                    <div className="text-sm" style={{ color: '#002B6B' }}>
+                                      {video.name}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {video.size} • {video.duration}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <button
+                                  onClick={() => handleDownloadVideo(video.name)}
+                                  className="flex items-center gap-1 text-sm hover:opacity-70 transition-opacity px-3 py-1 rounded whitespace-nowrap"
+                                  style={{ color: '#336699' }}
+                                >
+                                  <Download className="w-4 h-4" />
+                                  <span>Baixar vídeo</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-center gap-2">
-        <Button
-          onClick={() => goToPage(currentPage - 1)}
-          disabled={currentPage === 1}
-          variant="outline"
-          size="sm"
-          style={{ borderColor: '#002B6B', color: '#002B6B' }}
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </Button>
-
-        <div className="flex gap-1">
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            let pageNum;
-            if (totalPages <= 5) {
-              pageNum = i + 1;
-            } else if (currentPage <= 3) {
-              pageNum = i + 1;
-            } else if (currentPage >= totalPages - 2) {
-              pageNum = totalPages - 4 + i;
-            } else {
-              pageNum = currentPage - 2 + i;
-            }
-
-            return (
-              <Button
-                key={pageNum}
-                onClick={() => goToPage(pageNum)}
-                variant={currentPage === pageNum ? 'default' : 'outline'}
-                size="sm"
-                className={currentPage === pageNum ? 'text-white' : ''}
-                style={
-                  currentPage === pageNum
-                    ? { backgroundColor: '#002B6B' }
-                    : { borderColor: '#002B6B', color: '#002B6B' }
-                }
-              >
-                {pageNum}
-              </Button>
-            );
-          })}
+      {/* Estado vazio */}
+      {filteredVideoData.length === 0 && selectedDate && (
+        <div className="text-center py-12">
+          <FolderOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-500">Pasta vazia</p>
         </div>
+      )}
 
-        <Button
-          onClick={() => goToPage(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          variant="outline"
-          size="sm"
-          style={{ borderColor: '#002B6B', color: '#002B6B' }}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </Button>
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={videoToDelete !== null} onOpenChange={() => setVideoToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Gravação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a excluir permanentemente o vídeo #{videoToDelete}. Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDelete}
-              className="bg-red-600 text-white hover:bg-red-700"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {filteredVideoData.length === 0 && !selectedDate && (
+        <div className="text-center py-12">
+          <FolderOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-500">Nenhuma gravação de vídeo disponível</p>
+        </div>
+      )}
     </div>
   );
 }

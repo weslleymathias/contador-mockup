@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Printer, Plus, Minus } from 'lucide-react';
+import { Printer } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import {
@@ -29,20 +29,18 @@ export function Home() {
   const [showFinishDialog, setShowFinishDialog] = useState(false);
 
   const addPartial = () => {
-    if (count === 0) {
-      toast.error('A contagem está em 0');
-      return;
-    }
+    const newCount = count + 1;
+    setCount(newCount);
     
     const newPartial: Partial = {
       id: Date.now().toString(),
       partial: partials.length + 1,
-      count: count,
+      count: newCount,
       weight: Math.round((Math.random() * 50 + 50) * 100) / 100,
       lot: lot || '-',
     };
     setPartials([...partials, newPartial]);
-    toast.success('Parcial adicionada!');
+    toast.success(`Parcial ${newPartial.partial} adicionada!`);
   };
 
   const handleZero = () => {
@@ -95,39 +93,7 @@ export function Home() {
 
       {/* Counter */}
       <div className="text-center mb-4">
-        <div className="text-8xl tabular-nums mb-4" style={{ color: '#002B6B' }}>{count}</div>
-        
-        {/* Counter Controls */}
-        <div className="flex gap-3 justify-center mb-4">
-          <Button 
-            onClick={() => {
-              setCount(count + 1);
-              toast.success('+1', { duration: 1000 });
-            }}
-            size="lg"
-            className="text-white px-8"
-            style={{ backgroundColor: '#336699' }}
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Adicionar
-          </Button>
-          <Button 
-            onClick={() => {
-              if (count > 0) {
-                setCount(count - 1);
-                toast.success('-1', { duration: 1000 });
-              }
-            }}
-            size="lg"
-            variant="outline"
-            disabled={count === 0}
-            className="px-8"
-            style={{ borderColor: '#002B6B', color: '#002B6B' }}
-          >
-            <Minus className="w-5 h-5 mr-2" />
-            Remover
-          </Button>
-        </div>
+        <div className="text-8xl tabular-nums mb-6" style={{ color: '#002B6B' }}>{count}</div>
       </div>
 
       {/* Add Partial Button */}
